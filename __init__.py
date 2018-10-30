@@ -189,6 +189,8 @@ class TimerSkill(MycroftSkill):
         # reset the mute flag with a new timer
         self.mute = False
 
+        self.enclosure.bus.emit(Message("metadata", {"type": "timer", "timers": self.active_timers}))
+
     def _get_next_timer(self):
         # Retrieve the next timer set to trigger
         next = None
@@ -364,6 +366,8 @@ class TimerSkill(MycroftSkill):
                 x += 2
             else:
                 x += 4
+
+        self.enclosure.bus.emit(Message("metadata", {"type": "timer", "timers": self.active_timers}))
 
     # Handles 'How much time left'
     @intent_file_handler('status.timer.intent')
