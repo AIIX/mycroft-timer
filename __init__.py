@@ -93,6 +93,10 @@ class TimerSkill(MycroftSkill):
                        self.handle_listener_ended)
         self.add_event('skill.mycrofttimer.verify.cancel',
                        self.handle_verify_stop_timer)
+        self.add_event('skill.mycrofttimer.pause',
+                       self.handle_pause_timer)
+        self.add_event('skill.mycrofttimer.resume',
+                       self.handle_resume_timer)
 
     def pickle(self):
         # Save the timers for reload
@@ -169,6 +173,7 @@ class TimerSkill(MycroftSkill):
                  "index": self.timer_index,
                  "duration": secs,
                  "expires": time_expires,
+                 "running": True,
                  "announced": False}
         self.active_timers.append(timer)
 
@@ -189,16 +194,17 @@ class TimerSkill(MycroftSkill):
         # reset the mute flag with a new timer
         self.mute = False
 
-        timers = []
-        for timer in self.active_timers:
-            timers.append({
-                 "name": timer["name"],
-                 "index": timer["index"],
-                 "duration": timer["duration"],
-                 "remaining": timer["duration"]
-                })
+    def handle_pause_timer(self, message):
+        try:
+            self.active_timers[message.data["id"]]["running"] = False
+        except:
+            pass
 
-        self.enclosure.bus.emit(Message("metadata", {"type": "mycroft-timer", "timers": timers}))
+    def handle_resume_timer(self, message):
+        try:
+            self.active_timers[message.data["id"]]["running"] = True
+        except:
+            pass
 
     def _get_next_timer(self):
         # Retrieve the next timer set to trigger
@@ -235,6 +241,24 @@ class TimerSkill(MycroftSkill):
             return timer
 
         return None
+
+    def send_timers_data(self):
+        timers = []
+        for timer in self.active_timers:
+            remaining = round((timer["expires"] - datetime.now()).total_seconds())
+            #FIXME HACK
+            if not timer["running"]:
+                timer["expires"] = timer["expires"] + timedelta(0, 1)
+            timers.append({
+                 "name": timer["name"],
+                 "index": timer["index"],
+                 "duration": timer["duration"],
+                 "running": timer["running"],
+                 "formatted_remaining": nice_duration(self, remaining, "en-us", False),
+                 "remaining": remaining
+                })
+
+        self.enclosure.bus.emit(Message("metadata", {"type": "mycroft-timer", "timers": timers}))
 
     def update_display(self, message):
         # Get the next triggering timer
@@ -315,16 +339,7 @@ class TimerSkill(MycroftSkill):
 
                 timer["announced"] = True
 
-        timers = []
-        for timer in self.active_timers:
-            timers.append({
-                 "name": timer["name"],
-                 "index": timer["index"],
-                 "duration": timer["duration"],
-                 "remaining": round((timer["expires"] - datetime.now()).total_seconds())
-                })
-
-        self.enclosure.bus.emit(Message("metadata", {"type": "mycroft-timer", "timers": timers}))
+        self.send_timers_data()
 
     def render_timer(self, idx, seconds):
         display_owner = self.enclosure.display_manager.get_active()
@@ -547,6 +562,7 @@ class TimerSkill(MycroftSkill):
         # Cancel given timer
         if timer:
             self.active_timers.remove(timer)
+            self.send_timers_data()
             if len(self.active_timers) == 0:
                 self.timer_index = 0  # back to zero timers
             self.enclosure.eyes_on()  # reset just in case
