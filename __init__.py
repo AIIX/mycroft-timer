@@ -189,7 +189,16 @@ class TimerSkill(MycroftSkill):
         # reset the mute flag with a new timer
         self.mute = False
 
-        self.enclosure.bus.emit(Message("metadata", {"type": "timer", "timers": self.active_timers}))
+        timers = []
+        for timer in self.active_timers:
+            timers.append({
+                 "name": timer["name"],
+                 "index": timer["index"],
+                 "duration": timer["duration"],
+                 "remaining": timer["duration"]
+                })
+
+        self.enclosure.bus.emit(Message("metadata", {"type": "mycroft-timer", "timers": timers}))
 
     def _get_next_timer(self):
         # Retrieve the next timer set to trigger
@@ -306,6 +315,17 @@ class TimerSkill(MycroftSkill):
 
                 timer["announced"] = True
 
+        timers = []
+        for timer in self.active_timers:
+            timers.append({
+                 "name": timer["name"],
+                 "index": timer["index"],
+                 "duration": timer["duration"],
+                 "remaining": round((timer["expires"] - datetime.now()).total_seconds())
+                })
+
+        self.enclosure.bus.emit(Message("metadata", {"type": "mycroft-timer", "timers": timers}))
+
     def render_timer(self, idx, seconds):
         display_owner = self.enclosure.display_manager.get_active()
         if display_owner == "":
@@ -366,8 +386,6 @@ class TimerSkill(MycroftSkill):
                 x += 2
             else:
                 x += 4
-
-        self.enclosure.bus.emit(Message("metadata", {"type": "timer", "timers": self.active_timers}))
 
     # Handles 'How much time left'
     @intent_file_handler('status.timer.intent')
